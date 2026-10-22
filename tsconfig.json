@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "es2023",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "outDir": "dist",
+    "rootDir": ".",
+    "strict": true,
+    "skipLibCheck": true,
+    "declaration": false,
+    "sourceMap": false,
+    "types": ["node"],
+    "noUncheckedIndexedAccess": true,
+    "noImplicitReturns": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}
