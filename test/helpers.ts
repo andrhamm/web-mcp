@@ -53,6 +53,25 @@ export function stubFetch(route: Route) {
   return { calls, restore: () => (globalThis.fetch = real) };
 }
 
+export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Poll until `check` is true, or fail after `ms`. */
+export async function waitFor(check: () => boolean, ms = 3000, what = "condition") {
+  const end = Date.now() + ms;
+  while (!check()) {
+    if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+    await sleep(25);
+  }
+}
+
+export const lines = (p: string): string[] => {
+  try {
+    return readFileSync(p, "utf8").trim().split("\n").filter(Boolean);
+  } catch {
+    return [];
+  }
+};
+
 export const html = (body: string, status = 200, headers: Record<string, string> = {}) =>
   new Response(body, { status, headers: { "content-type": "text/html; charset=utf-8", ...headers } });
 export const json = (body: unknown, status = 200) =>

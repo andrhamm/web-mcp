@@ -21,7 +21,13 @@ async function reply(fn: () => Promise<string>) {
   }
 }
 
-export function buildServer(tiers: Set<Tier>): McpServer {
+/**
+ * Build the server. `connection` is the HTTP request's own abort signal when serving HTTP: the SDK aborts it when the
+ * client disconnects but does not pass that on to the tool handler's signal, so the two are combined here.
+ */
+export function buildServer(tiers: Set<Tier>, connection?: AbortSignal): McpServer {
+  const cancel = (ctx: { mcpReq: { signal: AbortSignal } }) =>
+    connection ? AbortSignal.any([ctx.mcpReq.signal, connection]) : ctx.mcpReq.signal;
   const s = new McpServer({ name: "web-mcp", version: VERSION });
 
   if (tiers.has("basic")) {
@@ -34,7 +40,10 @@ export function buildServer(tiers: Set<Tier>): McpServer {
         inputSchema: LOOKUP_INPUT,
         annotations,
       },
-      (a) => reply(() => research({ ...a, goal: "Answer the question directly.", depth: "quick", recency: "any", cache: "use" }, "basic")),
+      (a, ctx) =>
+        reply(() =>
+          research({ ...a, goal: "Answer the question directly.", depth: "quick", recency: "any", cache: "use" }, "basic", cancel(ctx)),
+        ),
     );
     s.registerTool(
       "web_read",
@@ -44,9 +53,13 @@ export function buildServer(tiers: Set<Tier>): McpServer {
         inputSchema: READ_INPUT,
         annotations,
       },
-      (a) =>
+      (a, ctx) =>
         reply(() =>
-          readPage({ url: a.url, goal: a.question ?? "Summarize what the page says.", max_tokens: a.max_tokens, cache: "use" }, "basic"),
+          readPage(
+            { url: a.url, goal: a.question ?? "Summarize what the page says.", max_tokens: a.max_tokens, cache: "use" },
+            "basic",
+            cancel(ctx),
+          ),
         ),
     );
   }
@@ -61,7 +74,7 @@ export function buildServer(tiers: Set<Tier>): McpServer {
         inputSchema: RESEARCH_INPUT,
         annotations,
       },
-      (a) => reply(() => research({ ...a, depth: "quick", recency: "any", cache: "use" }, a.format)),
+      (a, ctx) => reply(() => research({ ...a, depth: "quick", recency: "any", cache: "use" }, a.format, cancel(ctx))),
     );
     s.registerTool(
       "web_page",
@@ -72,7 +85,7 @@ export function buildServer(tiers: Set<Tier>): McpServer {
         inputSchema: PAGE_INPUT,
         annotations,
       },
-      (a) => reply(() => readPage({ ...a, cache: "use" }, a.format)),
+      (a, ctx) => reply(() => readPage({ ...a, cache: "use" }, a.format, cancel(ctx))),
     );
   }
 
@@ -86,7 +99,7 @@ export function buildServer(tiers: Set<Tier>): McpServer {
         inputSchema: INVESTIGATE_INPUT,
         annotations,
       },
-      (a) => reply(() => research(a, a.format)),
+      (a, ctx) => reply(() => research(a, a.format, cancel(ctx))),
     );
     if (braveKey()) {
       s.registerTool(

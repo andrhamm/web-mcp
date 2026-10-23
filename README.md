@@ -69,7 +69,7 @@ Tools come in three tiers, so each agent role can be given only the tools it can
 
 `max_tokens` (50 to 4000) is a ceiling, not a target. Haiku is asked for the shortest reply that serves the goal. If it still runs over, the server drops the least important findings first, then quotes, then gaps, then trailing sentences, and marks the reply `trimmed yes`. Tokens are estimated with an o200k count times 1.3, which tracks Claude's tokenizer on prose and runs low on code.
 
-`depth` sets the effort: `quick` allows 2 searches and 3 page reads, `standard` 4 and 6, `deep` 8 and 12.
+`depth` sets the effort: `quick` allows 2 searches and 3 page reads, `standard` 4 and 6, `deep` 8 and 12. Each call has a time budget (90, 180 or 300 seconds; 90 for page tools) counted from when it arrives, so time spent waiting for a free slot uses it up too.
 
 ## Replies
 
@@ -95,17 +95,21 @@ The basic tools return only the answer, the sources and a `Not found:` line. Sta
 
 `verified n/m` means n of the m quotes in the reply were checked word for word against page text the server holds: the page itself for `web_read` and `web_page`, and the Brave snippets for research runs. A quote that fails the check is removed and its claim kept, so the other m minus n quotes were not checked: they come from pages Haiku read through WebFetch, whose text the server never sees.
 
-Errors come back as tool errors with a code first: `claude_not_signed_in`, `no_backend`, `rate_limited`, `timeout`, `fetch_failed`, `blocked_url`, `bad_output`.
+Errors come back as tool errors with a code first: `claude_not_signed_in`, `no_backend`, `rate_limited`, `busy`, `timeout`, `cancelled`, `fetch_failed`, `blocked_url`, `bad_output`.
 
 ## How it works
 
 Each research call is one headless `claude -p` run on Haiku with only the WebSearch and WebFetch tools. Haiku splits the question into the parts the goal needs, searches, reads the most promising pages, checks after each read whether every part is backed by a quote, and stops when it is, or when the depth caps are reached. It then fills a JSON structure whose schema carries length limits sized to `max_tokens` (answer length, number of findings, quote and gap length). Claude Code rejects output that breaks them and Haiku rewrites it, which keeps most replies inside the cap without trimming. The server then renders, verifies, trims if still needed, and caches.
 
-With a Brave key, the server first runs one Brave web search and gives Haiku the results and snippets as a head start, so simple questions often need no further searching. Each uncached research call spends one Brave request, and each `web_search` call spends one. Page tools spend none.
+With a Brave key, the server first runs one Brave web search and gives Haiku the results and snippets as a head start, so simple questions often need no further searching. Each uncached research call spends one Brave request, and each `web_search` call spends one. Page tools spend none. Brave accepts at most 75 words per query, so long questions are cut to fit. If Brave rejects a query, only that call loses its head start; only a key or plan error switches Brave off until restart.
 
 Page tools fetch the page directly (public addresses only, 2 MB, 20 seconds), extract the main text with Mozilla Readability, convert it to compact markdown, keep the passages that match the goal, and give those to Haiku with no tools.
 
 The Claude run is isolated from your own Claude Code setup: no user or project settings, hooks, plugins, MCP servers or slash commands, an empty working directory, and no saved session. `ANTHROPIC_API_KEY` is removed from its environment so it always uses the subscription and never bills the API.
+
+## Cancellation
+
+When a caller cancels a call, or drops its connection, the server removes it from the wait queue or stops its Claude run at once, so no subscription usage is spent on an answer nobody will read. Over stdio this works for any client. Over HTTP it works when the client closes the request's connection, as clients on the 2026-07-28 protocol do. Clients on the older 2025 protocol cancel with a separate message that a stateless HTTP server cannot match to the call, so their abandoned runs stop at the time budget instead.
 
 ## Cache
 
@@ -130,7 +134,8 @@ Brave's API terms allow only transient storage of search results, so they are ne
 | `BRAVE_API_KEY`, `BRAVE_API_KEY_FILE` | unset | Brave key, or a file holding it. Enables the head start and `web_search`. |
 | `CLAUDE_BIN` | `claude` | Path to the Claude Code command. |
 | `WEB_MCP_MODEL` | `haiku` | Model alias or id passed to `claude --model`. |
-| `WEB_MCP_CONCURRENCY` | 2 | Claude runs at once; the rest wait. |
+| `WEB_MCP_CONCURRENCY` | 2 | Claude runs at once; the rest wait in order. |
+| `WEB_MCP_QUEUE` | 8 | Calls allowed to wait for a slot; beyond that a call fails at once with `busy`. |
 | `WEB_MCP_CACHE_DIR` | platform cache dir | Where cached answers and pages live. |
 | `WEB_MCP_HTTP_TOKEN` | unset | Bearer token for `--http`; required off loopback. |
 

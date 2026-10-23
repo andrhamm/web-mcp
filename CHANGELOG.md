@@ -7,3 +7,6 @@
 - Replies are compact markdown sized to `max_tokens`, enforced by per-request schema length limits and a trimming safety net, with an optional `format: "json"`.
 - Flat-file cache for answers and fetched pages; Brave results are held in memory only.
 - stdio and Streamable HTTP transports.
+- Bounded wait queue (`WEB_MCP_QUEUE`, error `busy`); each call's time budget includes waiting.
+- Cancelling a call, or closing its connection, stops its Claude run (error `cancelled`).
+- Brave queries are cut to Brave's 75-word limit; a rejected query no longer switches Brave off.

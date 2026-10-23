@@ -30,7 +30,7 @@ for (const t of tiers) {
     process.exit(2);
   }
 }
-const factory = () => buildServer(tiers);
+const factory = (ctx: { requestInfo?: Request }) => buildServer(tiers, ctx.requestInfo?.signal);
 
 const http = arg("--http");
 if (http === undefined) {

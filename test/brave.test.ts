@@ -81,6 +81,23 @@ test("renderHits numbers results and limits snippets", () => {
   assert.equal(text, "[1] A. https://a.example (2026-01-02)\n  one\n  two");
 });
 
+test("a rejected query (422 VALIDATION) fails that call only and leaves Brave on", async () => {
+  stub = stubFetch(() =>
+    json(
+      {
+        error: {
+          code: "VALIDATION",
+          detail: "Unable to validate request parameter(s)",
+          meta: { errors: [{ type: "too_long", msg: "Search query must be at most 75 words (you entered 108)." }] },
+        },
+      },
+      422,
+    ),
+  );
+  await assert.rejects(braveSearch("too long", { count: 3 }), { code: "fetch_failed", message: /at most 75 words/ });
+  assert.equal(braveAvailable(), true);
+});
+
 test("a rejected key turns Brave off for the process", async () => {
   stub = stubFetch(() => json({ error: { code: "SUBSCRIPTION_TOKEN_INVALID" } }, 422));
   await assert.rejects(braveSearch("q422", { count: 3 }), { code: "no_backend", message: /SUBSCRIPTION_TOKEN_INVALID/ });

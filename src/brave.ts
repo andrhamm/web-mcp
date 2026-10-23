@@ -23,6 +23,11 @@ export function braveKey(env: NodeJS.ProcessEnv = process.env): string | undefin
   return undefined;
 }
 
+/** The fields of a Brave error body this server reads. */
+interface BraveError {
+  error?: { code?: string; detail?: string; meta?: { errors?: { msg?: string }[] } };
+}
+
 /** The fields of a Brave web result this server reads. */
 interface BraveResult {
   url?: string;
@@ -38,13 +43,22 @@ let disabledReason: string | undefined;
 
 export const braveAvailable = () => !disabledReason && !!braveKey();
 
+// Brave answers 422 VALIDATION above 75 words ("Search query must be at most 75 words", checked 2026-10-23).
+const MAX_WORDS = 75;
+
+/** The question plus site filters, with the question cut so the whole query stays within Brave's word limit. */
 export function braveQuery(query: string, domains?: Domains): string {
   const inc = domains?.include ?? [];
   const exc = domains?.exclude ?? [];
-  const parts = [query];
-  if (inc.length) parts.push(inc.length === 1 ? `site:${inc[0]}` : `(${inc.map((d) => `site:${d}`).join(" OR ")})`);
-  for (const d of exc) parts.push(`-site:${d}`);
-  return parts.join(" ");
+  const filters: string[] = [];
+  if (inc.length) filters.push(inc.length === 1 ? `site:${inc[0]}` : `(${inc.map((d) => `site:${d}`).join(" OR ")})`);
+  for (const d of exc) filters.push(`-site:${d}`);
+  const filterWords = filters.join(" ").split(/\s+/).filter(Boolean).length;
+  const words = query
+    .trim()
+    .split(/\s+/)
+    .slice(0, Math.max(1, MAX_WORDS - filterWords));
+  return [words.join(" "), ...filters].join(" ");
 }
 
 const clean = (s: string) =>
@@ -74,11 +88,16 @@ export async function braveSearch(query: string, opts: { count: number; recency?
     throw new ToolError("fetch_failed", `Brave search failed: ${e.message}`);
   });
   if (res.status === 401 || res.status === 403 || res.status === 422) {
-    const err = (await res.json().catch(() => ({}))) as { error?: { code?: string } };
-    const code = err.error?.code ?? res.status;
-    disabledReason = `Brave rejected the API key (${code})`;
-    console.error(`[web-mcp] ${disabledReason}; Brave is off until restart`);
-    throw new ToolError("no_backend", disabledReason, "Check the Brave plan and key");
+    const err = (await res.json().catch(() => ({}))) as BraveError;
+    const code = err.error?.code ?? String(res.status);
+    // Only a key or subscription problem turns Brave off; a 422 is also how Brave rejects a bad query (code VALIDATION).
+    if (res.status !== 422 || /TOKEN|SUBSCRIPTION|AUTH/i.test(code)) {
+      disabledReason = `Brave rejected the API key (${code})`;
+      console.error(`[web-mcp] ${disabledReason}; Brave is off until restart`);
+      throw new ToolError("no_backend", disabledReason, "Check the Brave plan and key");
+    }
+    const why = err.error?.meta?.errors?.[0]?.msg ?? err.error?.detail ?? code;
+    throw new ToolError("fetch_failed", `Brave rejected the query: ${why}`, "Shorten the query or use fewer domain filters");
   }
   if (res.status === 429)
     throw new ToolError("rate_limited", "Brave rate limit or credit exhausted", "Wait a moment, or check the Brave plan's credit");

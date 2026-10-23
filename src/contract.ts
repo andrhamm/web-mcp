@@ -108,7 +108,16 @@ export type Result = Omit<ModelResult, "confidence" | "findings"> & { findings: 
 
 export class ToolError extends Error {
   constructor(
-    readonly code: "claude_not_signed_in" | "no_backend" | "rate_limited" | "timeout" | "fetch_failed" | "blocked_url" | "bad_output",
+    readonly code:
+      | "claude_not_signed_in"
+      | "no_backend"
+      | "rate_limited"
+      | "busy"
+      | "timeout"
+      | "cancelled"
+      | "fetch_failed"
+      | "blocked_url"
+      | "bad_output",
     message: string,
     readonly hint?: string,
   ) {

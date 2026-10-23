@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import { test } from "node:test";
 import { checkSignedIn, runClaude } from "../src/claude.js";
-import { limiter } from "../src/limit.js";
+import { limiter, QueueFull } from "../src/limit.js";
 import { claudeOutput, FAKE_CLAUDE, readLog, tmp } from "./helpers.js";
 
 const OUT = { answer: "a [1]", confidence: "medium", findings: [], sources: [{ url: "https://x.example", title: "X" }], gaps: [] };
@@ -101,4 +101,40 @@ test("limiter runs at most n tasks at once, in arrival order", async () => {
     }),
   );
   assert.equal(await run(async () => "after a failure"), "after a failure"); // a failed task frees its slot
+});
+
+test("limiter rejects when the queue is full, and a waiter that aborts leaves the queue", async () => {
+  const run = limiter(1, 1);
+  let release!: () => void;
+  const holding = run(() => new Promise<void>((r) => (release = r)));
+  const ac = new AbortController();
+  const waiter = run(async () => "should not run", ac.signal);
+  await assert.rejects(
+    run(async () => "no room"),
+    QueueFull,
+  );
+  ac.abort(new Error("caller left"));
+  await assert.rejects(waiter, /caller left/);
+  const next = run(async () => "runs after the holder"); // the aborted waiter freed its queue place
+  release();
+  await holding;
+  assert.equal(await next, "runs after the holder");
+  await assert.rejects(
+    run(async () => 1, AbortSignal.abort()),
+    { name: "AbortError" },
+  );
+});
+
+test("limiter hands a finished slot to the next waiter, never over the limit", async () => {
+  const run = limiter(2, 100);
+  let active = 0;
+  let peak = 0;
+  const task = async () => {
+    active++;
+    peak = Math.max(peak, active);
+    await new Promise((r) => setTimeout(r, Math.random() * 5));
+    active--;
+  };
+  await Promise.all(Array.from({ length: 60 }, (_, i) => (i % 3 === 0 ? Promise.resolve().then(() => run(task)) : run(task))));
+  assert.equal(peak, 2);
 });

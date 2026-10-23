@@ -5,6 +5,7 @@
 //   FAKE_CLAUDE_STDERR    text written to stderr
 //   FAKE_CLAUDE_SLEEP_MS  delay before answering
 //   FAKE_CLAUDE_SIGNED_OUT  makes `auth status` report signed out
+//   FAKE_CLAUDE_SIGNAL_LOG  file that gets a line when the process is told to stop (SIGTERM)
 import { appendFileSync, readFileSync } from "node:fs";
 
 const args = process.argv.slice(2);
@@ -12,6 +13,10 @@ if (args[0] === "auth") {
   console.log(JSON.stringify({ loggedIn: !process.env.FAKE_CLAUDE_SIGNED_OUT }));
   process.exit(0);
 }
+process.on("SIGTERM", () => {
+  if (process.env.FAKE_CLAUDE_SIGNAL_LOG) appendFileSync(process.env.FAKE_CLAUDE_SIGNAL_LOG, `SIGTERM ${process.pid}\n`);
+  process.exit(143);
+});
 let stdin = "";
 process.stdin.on("data", (d) => (stdin += d));
 process.stdin.on("end", () => {

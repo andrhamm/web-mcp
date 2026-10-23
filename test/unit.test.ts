@@ -193,6 +193,14 @@ test("parseStream counts real tool calls and validates the result", () => {
   assert.equal(ok.output.answer, "a");
 });
 
+test("brave query keeps the whole query within Brave's 75-word limit, filters intact", () => {
+  const long = Array.from({ length: 120 }, (_, i) => `w${i}`).join(" ");
+  const q = braveQuery(long, { include: ["a.com", "b.org"], exclude: ["c.net"] });
+  assert.equal(q.split(/\s+/).length, 75);
+  assert.match(q, /^w0 w1 .* \(site:a\.com OR site:b\.org\) -site:c\.net$/);
+  assert.equal(braveQuery("short question"), "short question");
+});
+
 test("brave query adds site filters", () => {
   assert.equal(braveQuery("x", { include: ["a.com"] }), "x site:a.com");
   assert.equal(braveQuery("x", { include: ["a.com", "b.org"], exclude: ["c.net"] }), "x (site:a.com OR site:b.org) -site:c.net");

@@ -7,7 +7,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
-import { FAKE_CLAUDE, tmp } from "./helpers.js";
+import { claudeOutput, FAKE_CLAUDE, lines, tmp, waitFor } from "./helpers.js";
 
 const ENTRY = fileURLToPath(new URL("../src/index.js", import.meta.url));
 const baseEnv = () => ({
@@ -96,4 +96,44 @@ test("--tiers limits the tools; unknown tiers and --help exit cleanly", async ()
   assert.deepEqual(await tools(stdio(["--tiers", "advanced"], { BRAVE_API_KEY: "k" })), ["web_investigate", "web_search"]);
   assert.equal((await start(["--tiers", "basic,bogus"]).ready).code, 2);
   assert.equal((await start(["--help"]).ready).code, 0);
+});
+
+const slowEnv = (sig: string) => ({
+  FAKE_CLAUDE_OUT: claudeOutput({ answer: "late", confidence: "low", findings: [], sources: [], gaps: [] }),
+  FAKE_CLAUDE_SLEEP_MS: "10000",
+  FAKE_CLAUDE_SIGNAL_LOG: sig,
+});
+
+test("a client that cancels a call over stdio stops the Claude run", async () => {
+  const sig = join(tmp(), "signals.log");
+  const c = new Client({ name: "t", version: "0" });
+  await c.connect(new StdioClientTransport({ command: process.execPath, args: [ENTRY], env: { ...baseEnv(), ...slowEnv(sig) } }));
+  try {
+    const ac = new AbortController();
+    const call = c.callTool({ name: "web_lookup", arguments: { question: "slow?" } }, { signal: ac.signal });
+    setTimeout(() => ac.abort(), 700);
+    await assert.rejects(call);
+    await waitFor(() => lines(sig).length === 1, 4000, "SIGTERM after a stdio cancel");
+  } finally {
+    await c.close();
+  }
+});
+
+test("a client that cancels a call over HTTP stops the Claude run", async () => {
+  const sig = join(tmp(), "signals.log");
+  const n = port();
+  const s = start(["--http", `127.0.0.1:${n}`], slowEnv(sig));
+  try {
+    assert.equal((await s.ready).code, null);
+    const c = new Client({ name: "t", version: "0" }, { versionNegotiation: { mode: "auto" } });
+    await c.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${n}/mcp`)));
+    const ac = new AbortController();
+    const call = c.callTool({ name: "web_lookup", arguments: { question: "slow?" } }, { signal: ac.signal });
+    setTimeout(() => ac.abort(), 700);
+    await assert.rejects(call);
+    await waitFor(() => lines(sig).length === 1, 4000, "SIGTERM after an HTTP cancel");
+    await c.close();
+  } finally {
+    s.p.kill();
+  }
 });

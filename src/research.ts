@@ -39,7 +39,7 @@ function finish(r: Result, maxTokens: number, format: Format | "basic", t0: numb
   return render({ ...t, meta: { ...t.meta, verified, elapsed_ms: Date.now() - t0 } }, format);
 }
 
-export async function research(input: ResearchInput, format: Format | "basic"): Promise<string> {
+export async function research(input: ResearchInput, format: Format | "basic", signal?: AbortSignal): Promise<string> {
   const t0 = Date.now();
   const key = [
     "answer:v1",
@@ -89,6 +89,7 @@ export async function research(input: ResearchInput, format: Format | "basic"): 
     tools: ["WebSearch", "WebFetch"],
     maxTurns: d.turns,
     timeoutMs: d.timeoutMs,
+    signal,
   });
   const { confidence, ...out } = run.output;
   let r: Result = compact({
@@ -126,7 +127,7 @@ export interface PageInput {
   cache: "use" | "refresh";
 }
 
-export async function readPage(input: PageInput, format: Format | "basic"): Promise<string> {
+export async function readPage(input: PageInput, format: Format | "basic", signal?: AbortSignal): Promise<string> {
   const t0 = Date.now();
   const key = ["page-answer:v1", input.url, normKey(input.goal), bucket(input.max_tokens)].join("|");
   if (input.cache === "use") {
@@ -164,6 +165,7 @@ export async function readPage(input: PageInput, format: Format | "basic"): Prom
     tools: [],
     maxTurns: 5,
     timeoutMs: 90_000,
+    signal,
   });
   const { confidence, ...out } = run.output;
   const published = page.published?.slice(0, 10);
