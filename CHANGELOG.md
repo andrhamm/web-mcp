@@ -10,3 +10,6 @@
 - Bounded wait queue (`WEB_MCP_QUEUE`, error `busy`); each call's time budget includes waiting.
 - Cancelling a call, or closing its connection, stops its Claude run (error `cancelled`).
 - Brave queries are cut to Brave's 75-word limit; a rejected query no longer switches Brave off.
+- A timeout while a page body downloads reports `timeout`; other body read failures report `fetch_failed`.
+- Pages are decoded with the charset from the Content-Type header or a `<meta>` tag, falling back to UTF-8.
+- A stopped Claude run that ignores SIGTERM is killed after 3 seconds.

@@ -1,7 +1,7 @@
 // fetchPage against a scripted fetch. Hosts are public IP literals so no DNS is needed.
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { fetchPage } from "../src/reader.js";
+import { decode, fetchPage } from "../src/reader.js";
 import { fixture, html, stubFetch } from "./helpers.js";
 
 const PUBLIC = "http://93.184.215.14";
@@ -74,4 +74,49 @@ test("bodies over 2 MB are cut, not rejected", async () => {
 
 test("an unresolvable host is a fetch failure", async () => {
   await assert.rejects(fetchPage("http://no-such-host.invalid/x"), { code: "fetch_failed", message: /resolve/ });
+});
+
+const streamed = (chunks: string[], failWith: Error, headers = { "content-type": "text/html" }) =>
+  new Response(
+    new ReadableStream({
+      start(c) {
+        for (const ch of chunks) c.enqueue(new TextEncoder().encode(ch));
+        c.error(failWith);
+      },
+    }),
+    { headers },
+  );
+
+test("a timeout while the body downloads is a timeout; other read failures are fetch failures", async () => {
+  stub = stubFetch(() => streamed(["<title>half</title><p>part"], new DOMException("The operation timed out.", "TimeoutError")));
+  await assert.rejects(fetchPage(`${PUBLIC}/slow-body`), { code: "timeout", message: /Could not read 93\.184\.215\.14/ });
+  stub.restore();
+  stub = stubFetch(() => streamed(["<p>part"], new Error("socket hang up")));
+  await assert.rejects(fetchPage(`${PUBLIC}/reset-body`), { code: "fetch_failed", message: /socket hang up/ });
+});
+
+test("pages are decoded with their declared charset", async () => {
+  const latin1 = Uint8Array.from([
+    ...Buffer.from("<title>Caf"),
+    0xe9,
+    ...Buffer.from("</title><p>Caf"),
+    0xe9,
+    ...Buffer.from(" au lait, cr"),
+    0xe8,
+    ...Buffer.from("me br"),
+    0xfb,
+    ...Buffer.from("l"),
+    0xe9,
+    ...Buffer.from("e.</p>"),
+  ]);
+  stub = stubFetch(() => new Response(latin1, { headers: { "content-type": "text/html; charset=ISO-8859-1" } }));
+  const p = await fetchPage(`${PUBLIC}/fr`);
+  assert.equal(p.title, "Café");
+  assert.match(p.markdown, /Café au lait, crème brûlée\./);
+  // No header charset: the <meta> tag decides.
+  const sjis = Uint8Array.from([...Buffer.from('<meta charset="shift_jis"><title>'), 0x93, 0xfa, 0x96, 0x7b, ...Buffer.from("</title>")]);
+  assert.match(decode(sjis, "text/html"), /<title>日本<\/title>/);
+  // Unknown labels and no label fall back to UTF-8.
+  assert.equal(decode(Buffer.from("naïve"), "text/html; charset=x-unknown"), "naïve");
+  assert.equal(decode(Buffer.from("naïve"), "text/html"), "naïve");
 });

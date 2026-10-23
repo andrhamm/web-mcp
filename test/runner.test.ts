@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { checkSignedIn, runClaude } from "../src/claude.js";
 import { limiter, QueueFull } from "../src/limit.js";
-import { claudeOutput, FAKE_CLAUDE, readLog, tmp } from "./helpers.js";
+import { claudeOutput, FAKE_CLAUDE, readLog, tmp, waitFor } from "./helpers.js";
 
 const OUT = { answer: "a [1]", confidence: "medium", findings: [], sources: [{ url: "https://x.example", title: "X" }], gaps: [] };
 const opts = { system: "sys", prompt: "the prompt", schema: "{}", tools: ["WebSearch", "WebFetch"], maxTurns: 4, timeoutMs: 10_000 };
@@ -137,4 +137,29 @@ test("limiter hands a finished slot to the next waiter, never over the limit", a
   };
   await Promise.all(Array.from({ length: 60 }, (_, i) => (i % 3 === 0 ? Promise.resolve().then(() => run(task)) : run(task))));
   assert.equal(peak, 2);
+});
+
+test("a run that ignores the polite stop is killed after a short grace period", async () => {
+  const log = join(tmp(), "log");
+  Object.assign(process.env, { FAKE_CLAUDE_SLEEP_MS: "30000", FAKE_CLAUDE_IGNORE_TERM: "1", FAKE_CLAUDE_LOG: log });
+  try {
+    const ac = new AbortController();
+    const call = runClaude({ ...opts, signal: ac.signal });
+    await waitFor(() => readLog(log).length === 1, 3000, "claude to start");
+    const { pid } = readLog(log)[0];
+    ac.abort();
+    await assert.rejects(call, { code: "cancelled" }); // the caller is answered at once
+    const alive = () => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    assert.equal(alive(), true); // still running: it ignored SIGTERM
+    await waitFor(() => !alive(), 6000, "SIGKILL");
+  } finally {
+    for (const k of ["FAKE_CLAUDE_SLEEP_MS", "FAKE_CLAUDE_IGNORE_TERM", "FAKE_CLAUDE_LOG"]) delete process.env[k];
+  }
 });

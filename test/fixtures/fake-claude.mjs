@@ -6,6 +6,7 @@
 //   FAKE_CLAUDE_SLEEP_MS  delay before answering
 //   FAKE_CLAUDE_SIGNED_OUT  makes `auth status` report signed out
 //   FAKE_CLAUDE_SIGNAL_LOG  file that gets a line when the process is told to stop (SIGTERM)
+//   FAKE_CLAUDE_IGNORE_TERM  keep running after SIGTERM, like a hung process
 import { appendFileSync, readFileSync } from "node:fs";
 
 const args = process.argv.slice(2);
@@ -15,7 +16,7 @@ if (args[0] === "auth") {
 }
 process.on("SIGTERM", () => {
   if (process.env.FAKE_CLAUDE_SIGNAL_LOG) appendFileSync(process.env.FAKE_CLAUDE_SIGNAL_LOG, `SIGTERM ${process.pid}\n`);
-  process.exit(143);
+  if (!process.env.FAKE_CLAUDE_IGNORE_TERM) process.exit(143);
 });
 let stdin = "";
 process.stdin.on("data", (d) => (stdin += d));
@@ -24,6 +25,7 @@ process.stdin.on("end", () => {
     appendFileSync(
       process.env.FAKE_CLAUDE_LOG,
       JSON.stringify({
+        pid: process.pid,
         args,
         stdin,
         cwd: process.cwd(),

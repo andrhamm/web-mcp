@@ -152,6 +152,8 @@ export function parseStream(stdout: string): RunResult {
 }
 
 const cancelled = () => new ToolError("cancelled", "The caller cancelled the request");
+/** How long a stopped claude process gets to exit after SIGTERM before it is killed. */
+const KILL_GRACE_MS = 3000;
 
 export async function runClaude(o: RunOptions): Promise<RunResult> {
   const deadline = Date.now() + o.timeoutMs;
@@ -179,8 +181,11 @@ async function spawnClaude(o: RunOptions, deadline: number): Promise<RunResult> 
       const p = spawn(bin(), claudeArgs(o), { cwd, env: childEnv(), stdio: ["pipe", "pipe", "pipe"] });
       let out = "";
       let err = "";
+      let killer: NodeJS.Timeout | undefined;
       const stop = (e: ToolError) => {
         p.kill("SIGTERM");
+        killer = setTimeout(() => p.kill("SIGKILL"), KILL_GRACE_MS); // force a run that ignores the polite stop
+        killer.unref();
         reject(e);
       };
       const onAbort = () => stop(cancelled());
@@ -211,6 +216,7 @@ async function spawnClaude(o: RunOptions, deadline: number): Promise<RunResult> 
         );
       });
       p.on("close", () => {
+        clearTimeout(killer);
         done();
         stderr = err.trim();
         if (stderr) console.error(`[web-mcp] claude stderr: ${stderr.slice(0, 500)}`);

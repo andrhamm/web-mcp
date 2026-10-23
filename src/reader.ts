@@ -78,12 +78,32 @@ export async function fetchPage(rawUrl: string): Promise<Page> {
       `Unsupported content type ${type.split(";")[0] || "unknown"}`,
       "Only HTML and plain text pages are read",
     );
-  const body = await readCapped(res);
+  const host = url.host;
+  const bytes = await readCapped(res).catch((e: Error) => {
+    // The timeout signal also covers the body, so a slow download fails here, after the headers arrived.
+    throw new ToolError(e.name === "TimeoutError" ? "timeout" : "fetch_failed", `Could not read ${host}: ${e.message}`);
+  });
+  const body = decode(bytes, type);
   return /text\/plain/.test(type) ? { url: url.href, title: url.href, markdown: body.trim() } : extract(body, url.href);
 }
 
-async function readCapped(res: Response): Promise<string> {
-  if (!res.body) return "";
+/**
+ * Decode with the charset from the Content-Type header, else from a <meta> tag near the top, else UTF-8.
+ * Labels follow the WHATWG Encoding standard (so "iso-8859-1" decodes as windows-1252); unknown labels fall back to UTF-8.
+ */
+export function decode(bytes: Uint8Array, contentType: string): string {
+  const head = new TextDecoder("windows-1252").decode(bytes.subarray(0, 2048)); // ASCII-safe view for sniffing
+  const label =
+    /charset\s*=\s*["']?([\w.:-]+)/i.exec(contentType)?.[1] ?? /<meta[^>]+charset\s*=\s*["']?([\w.:-]+)/i.exec(head)?.[1] ?? "utf-8";
+  try {
+    return new TextDecoder(label).decode(bytes);
+  } catch {
+    return new TextDecoder("utf-8").decode(bytes);
+  }
+}
+
+async function readCapped(res: Response): Promise<Uint8Array> {
+  if (!res.body) return new Uint8Array();
   const reader = res.body.getReader();
   const parts: Uint8Array[] = [];
   let size = 0;
@@ -98,7 +118,7 @@ async function readCapped(res: Response): Promise<string> {
       break; // keep what fits; the main text is usually near the top
     }
   }
-  return Buffer.concat(parts).toString("utf8");
+  return Buffer.concat(parts);
 }
 
 const turndown = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced", bulletListMarker: "-" });
