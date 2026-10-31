@@ -52,7 +52,7 @@ test("Brave head start goes into the prompt; quotes are checked against its snip
   assert.doesNotMatch(md, /never returned/);
   assert.match(md, /"unverifiable but kept"/);
   assert.match(md, /\[1\] Tower facts\. https:\/\/facts\.example\/tower\n/); // site name trimmed from the title
-  assert.match(md, /meta: claude-haiku-5-5, searches 0, pages 1, brave, verified 1\/2, cached no/);
+  assert.match(md, /meta: claude-haiku-5-5, searches 0, pages 1, brave, verified 1\/2, claude 0 in 0 out ~\$0\.000, cached no/);
   const brave = new URL(stub.calls[0]!);
   assert.equal(brave.searchParams.get("freshness"), "pw");
   assert.equal(brave.searchParams.get("q"), "How tall is the tower? site:facts.example -site:spam.example");

@@ -44,7 +44,7 @@ test("web_research returns markdown within the cap, real tool counts, and caches
   assert.equal(r1.isError, undefined, r1.content[0].text);
   const text: string = r1.content[0].text;
   assert.match(text, /^Answer: The Eiffel Tower is 330 m tall \[1\]\./);
-  assert.match(text, /meta: claude-haiku-5-5, searches 1, pages 1, verified 0\/2, cached no/);
+  assert.match(text, /meta: claude-haiku-5-5, searches 1, pages 1, verified 0\/2, claude 17\.2k in 916 out ~\$0\.023, cached no/);
   assert.match(text, /\nSources\n\[1\] Eiffel Tower facts\. https:\/\/example.org\/eiffel\n\nmeta/); // duplicate URL merged
   const calls = (await readFile(log, "utf8"))
     .trim()

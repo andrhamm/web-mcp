@@ -3,7 +3,7 @@ import { execFile, spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { MODEL_RESULT, type ModelResult, ToolError } from "./contract.js";
+import { MODEL_RESULT, type ModelResult, ToolError, type Usage } from "./contract.js";
 import { limiter, QueueFull } from "./limit.js";
 
 // Nesting markers (a stdio MCP server inherits them from Claude Code) and API keys (subscription only: never bill the API).
@@ -41,6 +41,7 @@ export interface RunResult {
   queries: string[];
   pages: string[];
   model: string;
+  usage: Usage;
 }
 
 export function claudeArgs(o: RunOptions): string[] {
@@ -96,6 +97,7 @@ interface ResultEvent extends StreamEvent {
   api_error_status?: number;
   structured_output?: unknown;
   modelUsage?: Record<string, unknown>;
+  total_cost_usd?: number;
   permission_denials?: unknown[];
 }
 const blocks = (e: StreamEvent): ContentBlock[] => (Array.isArray(e.message?.content) ? e.message.content : []);
@@ -148,18 +150,45 @@ export function parseStream(stdout: string): RunResult {
   }
   const parsed = MODEL_RESULT.safeParse(result.structured_output);
   if (!parsed.success) throw new ToolError("bad_output", "Claude's result did not match the schema");
-  return { output: parsed.data, queries, pages, model: Object.keys(result.modelUsage ?? {})[0] ?? "haiku" };
+  return { output: parsed.data, queries, pages, model: Object.keys(result.modelUsage ?? {})[0] ?? "haiku", usage: usageOf(result) };
+}
+
+interface ModelUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
+  costUSD?: number;
+}
+
+/** Tokens and estimated cost of the whole run, summed over every model it used (WebFetch reads pages with its own call). */
+function usageOf(result: ResultEvent): Usage {
+  const models = Object.values(result.modelUsage ?? {}) as ModelUsage[];
+  const sum = (k: keyof ModelUsage) => models.reduce((n, m) => n + (m[k] ?? 0), 0);
+  return {
+    input_tokens: sum("inputTokens"),
+    output_tokens: sum("outputTokens"),
+    cache_read_tokens: sum("cacheReadInputTokens"),
+    cache_write_tokens: sum("cacheCreationInputTokens"),
+    cost_usd: Math.round((result.total_cost_usd ?? sum("costUSD")) * 1e5) / 1e5,
+  };
 }
 
 const cancelled = () => new ToolError("cancelled", "The caller cancelled the request");
 /** How long a stopped claude process gets to exit after SIGTERM before it is killed. */
 const KILL_GRACE_MS = 3000;
 
-export async function runClaude(o: RunOptions): Promise<RunResult> {
+export const runClaude = (o: RunOptions): Promise<RunResult> => withSlot(o, (deadline) => spawnClaude(o, deadline));
+
+/**
+ * Run `task` in a Claude slot: wait in the bounded queue, then run with a deadline counted from the call.
+ * Work that only matters if Claude will run (the Brave head start) belongs inside `task`, so a `busy` refusal costs nothing.
+ */
+export async function withSlot<T>(o: { timeoutMs: number; signal?: AbortSignal }, task: (deadline: number) => Promise<T>): Promise<T> {
   const deadline = Date.now() + o.timeoutMs;
   const wait = AbortSignal.any([AbortSignal.timeout(o.timeoutMs), ...(o.signal ? [o.signal] : [])]);
   try {
-    return await run(() => spawnClaude(o, deadline), wait);
+    return await run(() => task(deadline), wait);
   } catch (e) {
     if (e instanceof ToolError) throw e;
     if (e instanceof QueueFull) throw new ToolError("busy", `Too many research calls at once: ${e.message}`, "Try again shortly");
@@ -170,7 +199,7 @@ export async function runClaude(o: RunOptions): Promise<RunResult> {
   }
 }
 
-async function spawnClaude(o: RunOptions, deadline: number): Promise<RunResult> {
+export async function spawnClaude(o: RunOptions, deadline: number): Promise<RunResult> {
   if (o.signal?.aborted) throw cancelled();
   const remaining = deadline - Date.now();
   if (remaining <= 0) throw new ToolError("timeout", "No time left after waiting for a free slot", "The server is busy; try again shortly");

@@ -8,7 +8,7 @@ The page text may be a selection of the passages most relevant to the goal rathe
 - confidence: high when the page states it directly; medium when it is implied or partial; low when the page barely touches the goal.
 - findings: evidence for the answer, most important first. Each has a one-sentence claim, source 1, a quote of 25 words or fewer copied exactly from the page text, and the date (YYYY-MM-DD) when the page gives one. The server checks every quote against the page and deletes any that do not match, so copy character for character, and leave out a claim you cannot quote. A finding that only repeats the answer wastes the caller's tokens.
 - sources: one entry for the page: url, title, published when known.
-- gaps: what the goal needs that the text you were given does not say, so the caller knows where to look next. Empty when none.
+- gaps: what the goal needs that the text you were given does not say, stated as facts about the subject, so the caller knows where to look next. Never notes about your process, quotes or wording. Empty when none.
 
 ## Size
 

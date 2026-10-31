@@ -45,7 +45,9 @@ if (http === undefined) {
     console.error(`Refusing to listen on ${host} without WEB_MCP_HTTP_TOKEN: the server spends your Claude subscription.`);
     process.exit(2);
   }
-  const handle = toNodeHandler(createMcpHandler(factory));
+  // A runtime that notices a dropped client only on its next write would otherwise keep a cancelled run going up to the
+  // SDK's 15 s default keep-alive; at 2 s an abandoned Claude run stops within about 2 s.
+  const handle = toNodeHandler(createMcpHandler(factory, { keepAliveMs: 2000 }));
   const validHost = localhostHostValidation();
   const validOrigin = localhostOriginValidation();
   createServer((req, res) => {

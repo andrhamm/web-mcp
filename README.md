@@ -83,12 +83,14 @@ Sources
 Gaps
 - Rate limits for the free credit were not checked.
 
-meta: claude-haiku-5-5, searches 0, pages 0, brave, verified 1/1, cached no, trimmed no, 7.5 s
+meta: claude-haiku-5-5, searches 0, pages 0, brave, verified 1/1, claude 19.4k in 610 out ~$0.006, cached no, trimmed no, 7.5 s
 ```
 
 The basic tools return only the answer, the sources and a `Not found:` line. Standard and advanced tools accept `format: "json"` for code that wants to parse the reply; the object matches `src/contract.ts`, with `findings[].source` as a 0-based index into `sources` and `findings[].verified: true` on quotes the server checked. The server does not send MCP structured content, because some clients show that to the model instead of the text.
 
 `verified n/m` means n of the m quotes in the reply were checked word for word against page text the server holds: the page itself for `web_read` and `web_page`, and the Brave snippets for research runs. A quote that fails the check is removed and its claim kept, so the other m minus n quotes were not checked: they come from pages Haiku read through WebFetch, whose text the server never sees.
+
+`claude 19.4k in 610 out ~$0.006` is what the Claude run behind this reply used: input tokens (including cached prompt reads and writes), output tokens, and Claude Code's own cost estimate at API list prices, summed over every model the run used. On a subscription nothing is billed per call, but the run counts toward the plan's usage limits, so callers can budget from this. A cached reply ran no Claude and shows no usage. The JSON form carries the same numbers in `meta.usage`.
 
 Errors come back as tool errors with a code first: `claude_not_signed_in`, `no_backend`, `rate_limited`, `busy`, `timeout`, `cancelled`, `fetch_failed`, `blocked_url`, `bad_output`.
 
@@ -104,7 +106,7 @@ The Claude run is isolated from your own Claude Code setup: no user or project s
 
 ## Cancellation
 
-When a caller cancels a call, or drops its connection, the server removes it from the wait queue or stops its Claude run at once, so no subscription usage is spent on an answer nobody will read. Over stdio this works for any client. Over HTTP it works when the client closes the request's connection, as clients on the 2026-07-28 protocol do. Clients on the older 2025 protocol cancel with a separate message that a stateless HTTP server cannot match to the call, so their abandoned runs stop at the time budget instead.
+When a caller cancels a call, or drops its connection, the server removes it from the wait queue or stops its Claude run at once, so no subscription usage is spent on an answer nobody will read. Over stdio this works for any client. Over HTTP it works when the client closes the request's connection, as clients on the 2026-07-28 protocol do. The server writes a keep-alive to each open event stream every 2 seconds, so even a runtime that only notices a dead connection on its next write stops the run within about 2 seconds. Clients on the older 2025 protocol cancel with a separate message that a stateless HTTP server cannot match to the call, so their abandoned runs stop at the time budget instead.
 
 ## Cache
 

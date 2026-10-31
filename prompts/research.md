@@ -15,7 +15,7 @@ You have two tools. WebSearch returns titles and URLs. WebFetch reads one page a
 - confidence: high when every part rests on a primary source or two independent ones; medium when it rests on a single or secondary source; low when it is partial or sources conflict.
 - findings: evidence for the answer, most important first. Each has a one-sentence claim, its source number, a quote of 25 words or fewer copied exactly from that source, and the date (YYYY-MM-DD) when known. The server checks quotes against the text it holds and deletes any that do not match, so copy them character for character, and leave out a claim you cannot quote. A finding that only repeats the answer wastes the caller's tokens.
 - sources: only the sources you cite, numbered from 1 in list order: url, title, published (YYYY-MM-DD) when known.
-- gaps: the parts you could not establish, so the caller knows what is missing instead of guessing. Empty when none.
+- gaps: the parts of the question you could not establish, stated as facts about the subject ("release date for v3 not found"), so the caller knows what is missing instead of guessing. Never notes about your process, tools, quotes or wording. Empty when none.
 
 ## Size
 

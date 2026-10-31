@@ -32,12 +32,19 @@ export function render(r: Result, format: Format | "basic"): string {
     `pages ${m.pages_read}`,
     ...(m.head_start ? ["brave"] : []),
     ...(quotes ? [`verified ${m.verified}/${quotes}`] : []),
+    ...(m.usage
+      ? [
+          `claude ${kilo(m.usage.input_tokens + m.usage.cache_read_tokens + m.usage.cache_write_tokens)} in ${kilo(m.usage.output_tokens)} out ~$${m.usage.cost_usd.toFixed(3)}`,
+        ]
+      : []),
     `cached ${m.cached ? "yes" : "no"}`,
     `trimmed ${m.trimmed ? "yes" : "no"}`,
     `${(m.elapsed_ms / 1000).toFixed(1)} s`,
   ].join(", ");
   return `${renderBody(r, format)}\n\nmeta: ${line}`;
 }
+
+const kilo = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
 /** The documented JSON contract: `findings[].source` is a 0-based index into `sources`. */
 function toContract(r: Result, withMeta: boolean) {

@@ -88,6 +88,15 @@ export function modelResultSchema(limits: Limits): string {
   return JSON.stringify(schema);
 }
 
+/** What one Claude run cost: tokens by kind, and Claude Code's own estimate at API list prices (subscriptions are not billed per call). */
+export interface Usage {
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  cost_usd: number;
+}
+
 export interface Meta {
   queries: string[];
   pages_read: number;
@@ -101,6 +110,8 @@ export interface Meta {
   /** Quotes in this reply that were checked against text the server holds and found there. */
   verified: number;
   head_start: boolean;
+  /** Absent when no Claude run happened for this reply (a cache hit). */
+  usage?: Usage;
 }
 /** A finding whose quote the server found in text it holds carries `verified: true`. */
 export type Finding = ModelResult["findings"][number] & { verified?: true };

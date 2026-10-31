@@ -137,3 +137,36 @@ test("a client that cancels a call over HTTP stops the Claude run", async () => 
     s.p.kill();
   }
 });
+
+test("HTTP event streams carry a keep-alive every 2 seconds, so a dead client is noticed quickly", async () => {
+  const n = port();
+  const s = start(["--http", `127.0.0.1:${n}`], slowEnv(join(tmp(), "signals.log")));
+  try {
+    assert.equal((await s.ready).code, null);
+    const ac = new AbortController();
+    const res = await fetch(`http://127.0.0.1:${n}/mcp`, {
+      method: "POST",
+      signal: ac.signal,
+      headers: { "content-type": "application/json", accept: "application/json, text/event-stream", "mcp-protocol-version": "2025-11-25" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: { name: "web_lookup", arguments: { question: "slow?" } },
+      }),
+    });
+    const reader = res.body!.getReader();
+    const t0 = Date.now();
+    let text = "";
+    while (!text.includes(": keepalive") && Date.now() - t0 < 4000) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      text += new TextDecoder().decode(value);
+    }
+    assert.match(text, /: keepalive/);
+    assert.ok(Date.now() - t0 < 3500, `first keep-alive after ${Date.now() - t0} ms`);
+    ac.abort();
+  } finally {
+    s.p.kill();
+  }
+});

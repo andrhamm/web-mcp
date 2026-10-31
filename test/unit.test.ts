@@ -237,3 +237,56 @@ test("the per-request schema carries length limits sized to the cap; parsing sta
   assert.equal(s.properties.gaps.maxItems, 3);
   assert.equal(JSON.parse(modelResultSchema(limits(100))).properties.findings.maxItems, 0);
 });
+
+test("an answer without [n] markers keeps its first source when trimming drops the findings", () => {
+  const r = compact({
+    ...sample(),
+    answer: "2.1.316, per npmx.",
+    findings: [{ claim: "Latest is 2.1.316 on the npmx package page.", source: 1, quote: "Latest version 2.1.316 published two days ago" }],
+    sources: [{ url: "https://npmx.dev/package/@anthropic-ai/claude-code", title: "@anthropic-ai/claude-code" }],
+    gaps: [],
+  });
+  const t = trim(r, 40, "basic");
+  assert.equal(t.findings.length, 0);
+  assert.deepEqual(
+    t.sources.map((s) => s.url),
+    ["https://npmx.dev/package/@anthropic-ai/claude-code"],
+  );
+  assert.match(render(t, "basic"), /\nSources\n\[1\] @anthropic-ai\/claude-code\. https:\/\/npmx\.dev/);
+});
+
+test("prompts keep process notes out of gaps", () => {
+  for (const f of ["research.md", "page.md"]) {
+    const p = readFileSync(new URL(`../../prompts/${f}`, import.meta.url), "utf8");
+    assert.match(p, /gaps:[^\n]*stated as facts about the subject[^\n]*Never notes about your process/, f);
+  }
+});
+
+test("parseStream reports usage summed over every model the run used", () => {
+  const r = parseStream(fixture("stream.jsonl"));
+  assert.deepEqual(r.usage, {
+    input_tokens: 120,
+    output_tokens: 916,
+    cache_read_tokens: 15000,
+    cache_write_tokens: 2100,
+    cost_usd: 0.02312,
+  });
+  const two = parseStream(
+    '{"type":"result","is_error":false,"result":"","modelUsage":{"a":{"inputTokens":1,"outputTokens":2,"costUSD":0.5},"b":{"inputTokens":10,"outputTokens":20,"costUSD":0.25}},"structured_output":{"answer":"x","confidence":"low","findings":[],"sources":[],"gaps":[]}}',
+  );
+  assert.deepEqual(two.usage, { input_tokens: 11, output_tokens: 22, cache_read_tokens: 0, cache_write_tokens: 0, cost_usd: 0.75 });
+});
+
+test("the meta line shows Claude usage, and hides it when there is none", () => {
+  const r = compact(sample());
+  const withUsage = {
+    ...r,
+    meta: {
+      ...r.meta,
+      usage: { input_tokens: 120, output_tokens: 916, cache_read_tokens: 15000, cache_write_tokens: 2100, cost_usd: 0.02312 },
+    },
+  };
+  assert.match(render(withUsage, "markdown"), /, claude 17\.2k in 916 out ~\$0\.023, cached no,/);
+  assert.doesNotMatch(render(r, "markdown"), /claude .* in /);
+  assert.equal(JSON.parse(render(withUsage, "json")).meta.usage.cost_usd, 0.02312);
+});

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.1 (2026-10-31)
+
+- The meta line and `meta.usage` report what each reply's Claude run used: tokens by kind and Claude Code's cost estimate.
+- A call refused as `busy` no longer spends a Brave request: the head start now runs inside the Claude slot.
+- Trimming no longer strips the only source from an answer that cites none with `[n]`.
+- Gaps describe what is missing about the subject, not the model's notes on its own process or quotes.
+- HTTP event streams send a keep-alive every 2 seconds (was 15), bounding how long an abandoned run can continue on a runtime that notices dropped clients late.
+
 ## 0.1.0 (2026-10-31)
 
 - Six tools in three tiers: `web_lookup` and `web_read` (basic), `web_research` and `web_page` (standard), `web_investigate` and `web_search` (advanced).

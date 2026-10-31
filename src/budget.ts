@@ -37,6 +37,7 @@ export function compact(r: Result): Result {
   const oldToNew = new Map<number, number>();
   const used = new Set<number>(r.findings.map((f) => f.source));
   for (const m of r.answer.matchAll(/\[(\d+)\]/g)) used.add(Number(m[1]));
+  if (used.size === 0 && r.sources.length) used.add(1); // an answer without [n] markers keeps its first source: a citation is the point
   r.sources.forEach((s, i) => {
     if (!used.has(i + 1)) return;
     const key = s.url.replace(/\/$/, "");
