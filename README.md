@@ -12,23 +12,16 @@ It exists so that small local models (and agents in a network sandbox) can use t
 
 ## Install
 
-Not yet published to npm. Until then, build from a clone:
-
-```bash
-npm install
-npm run build
-```
-
 Claude Code:
 
 ```bash
-claude mcp add --transport stdio web -- node <clone>/dist/src/index.js
+claude mcp add --transport stdio web -- npx -y @andrhamm/web-mcp
 ```
 
 pi coding agent:
 
 ```bash
-pi mcp add web -- node <clone>/dist/src/index.js
+pi mcp add web -- npx -y @andrhamm/web-mcp
 ```
 
 LM Studio and other clients that use an `mcp.json` file:
@@ -36,17 +29,19 @@ LM Studio and other clients that use an `mcp.json` file:
 ```json
 {
   "mcpServers": {
-    "web": { "command": "node", "args": ["<clone>/dist/src/index.js"], "env": { "BRAVE_API_KEY": "<your key>" } }
+    "web": { "command": "npx", "args": ["-y", "@andrhamm/web-mcp"], "env": { "BRAVE_API_KEY": "<your key>" } }
   }
 }
 ```
+
+The server reads `BRAVE_API_KEY` from the environment its client starts it with. A desktop app started outside a shell may not see variables your shell sets, so put the key in the client's `env` block or point `BRAVE_API_KEY_FILE` at a file that holds it.
 
 ### Sandboxed agents (HTTP)
 
 An agent in a sandbox has no Claude sign-in, so run the server on the host and let the sandbox reach it over HTTP:
 
 ```bash
-node dist/src/index.js --http 127.0.0.1:7343
+npx -y @andrhamm/web-mcp --http 127.0.0.1:7343
 claude mcp add --transport http web http://127.0.0.1:7343/mcp
 ```
 
@@ -155,10 +150,14 @@ Every uncached call runs Claude Code under your own sign-in and counts toward yo
 ## Development
 
 ```bash
+npm install
 npm test
+npm run lint
 ```
 
-Tests run against a fake `claude` command and need no network or sign-in.
+Tests run against a fake `claude` command and need no network or sign-in. To try a local build in Claude Code: `claude mcp add --transport stdio web -- node <clone>/dist/src/index.js`.
+
+Releasing: bump `version` in `package.json`, add the changes to `CHANGELOG.md`, commit, then push a matching tag (`git tag v0.2.0 && git push origin v0.2.0`). The publish workflow tests, builds and publishes to npm with provenance.
 
 ## License
 

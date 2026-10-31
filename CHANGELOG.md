@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-10-31)
 
 - Six tools in three tiers: `web_lookup` and `web_read` (basic), `web_research` and `web_page` (standard), `web_investigate` and `web_search` (advanced).
 - Research runs as one headless Claude Haiku session with WebSearch and WebFetch, with an optional Brave Search head start.

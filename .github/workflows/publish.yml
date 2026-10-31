@@ -1,0 +1,22 @@
+name: publish
+# Publishes to npm when a version tag (v1.2.3) is pushed. Uses npm trusted publishing: no token is stored anywhere,
+# npm checks this workflow's OIDC identity and adds provenance on its own.
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - name: Tag must match package.json version
+        run: test "v$(node -p 'require("./package.json").version')" = "$GITHUB_REF_NAME"
+      - run: npm publish

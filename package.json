@@ -1,9 +1,18 @@
 {
-  "name": "web-mcp",
+  "name": "@andrhamm/web-mcp",
   "version": "0.1.0",
   "description": "Local MCP server that answers web research questions with compact, cited, goal-filtered results sized to a token cap",
   "type": "module",
   "license": "MIT",
+  "author": "Andrew Hammond",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrhamm/web-mcp.git"
+  },
+  "homepage": "https://github.com/andrhamm/web-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/andrhamm/web-mcp/issues"
+  },
   "bin": {
     "web-mcp": "dist/src/index.js"
   },
@@ -17,12 +26,17 @@
   "engines": {
     "node": ">=22"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "lint": "biome check .",
     "format": "biome check --write .",
     "test": "tsc -p tsconfig.json && node --test \"dist/test/**/*.test.js\"",
-    "start": "node dist/src/index.js"
+    "start": "node dist/src/index.js",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run lint && npm test"
   },
   "keywords": [
     "mcp",
