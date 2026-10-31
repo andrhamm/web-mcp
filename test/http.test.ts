@@ -58,7 +58,7 @@ test("loopback HTTP serves /mcp only, and only to localhost Host headers", async
   const s = start(["--http", `127.0.0.1:${n}`]);
   try {
     assert.equal((await s.ready).code, null);
-    assert.equal((await tools(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${n}/mcp`)))).length, 5);
+    assert.equal((await tools(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${n}/mcp`)))).length, 6);
     assert.equal(await raw(n, "/other"), 404);
     assert.equal(await raw(n, "/mcp", { host: "evil.example" }), 403);
     assert.equal(await raw(n, "/mcp", { origin: "https://evil.example" }), 403);
@@ -77,7 +77,7 @@ test("with a token, requests need the bearer header", async () => {
     const t = new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${n}/mcp`), {
       requestInit: { headers: { authorization: "Bearer sekret" } },
     });
-    assert.equal((await tools(t)).length, 5);
+    assert.equal((await tools(t)).length, 6);
   } finally {
     s.p.kill();
   }
@@ -93,7 +93,9 @@ test("--tiers limits the tools; unknown tiers and --help exit cleanly", async ()
   const stdio = (args: string[], env: Record<string, string> = {}) =>
     new StdioClientTransport({ command: process.execPath, args: [ENTRY, ...args], env: { ...baseEnv(), ...env } });
   assert.deepEqual(await tools(stdio(["--tiers", "basic"])), ["web_lookup", "web_read"]);
-  assert.deepEqual(await tools(stdio(["--tiers", "advanced"], { BRAVE_API_KEY: "k" })), ["web_investigate", "web_search"]);
+  assert.deepEqual(await tools(stdio(["--tiers", "advanced"], { BRAVE_API_KEY: "k" })), ["web_investigate"]);
+  assert.deepEqual(await tools(stdio(["--tiers", "direct"], { BRAVE_API_KEY: "k" })), ["web_extract", "web_search"]);
+  assert.deepEqual(await tools(stdio(["--tiers", "direct"])), ["web_extract"]); // web_search needs a Brave key
   assert.equal((await start(["--tiers", "basic,bogus"]).ready).code, 2);
   assert.equal((await start(["--help"]).ready).code, 0);
 });

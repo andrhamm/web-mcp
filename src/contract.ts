@@ -39,6 +39,11 @@ export const READ_INPUT = z.object({
 export const RESEARCH_INPUT = z.object({ question: QUESTION, goal: GOAL, max_tokens: MAX_TOKENS.default(400), format: FORMAT });
 export const PAGE_INPUT = z.object({ url: URL_, goal: GOAL, max_tokens: MAX_TOKENS.default(400), format: FORMAT });
 export const INVESTIGATE_INPUT = RESEARCH_INPUT.extend({ depth: DEPTH, recency: RECENCY, domains: DOMAINS, cache: CACHE });
+export const EXTRACT_INPUT = z.object({
+  url: URL_,
+  goal: z.string().trim().min(1).max(500).describe("What you need from the page; the passages that match it are kept"),
+  max_tokens: MAX_TOKENS.default(1000),
+});
 export const SEARCH_INPUT = z.object({
   query: z.string().trim().min(1).max(400).describe("Search query"),
   count: z.number().int().min(1).max(20).default(8).describe("Number of results"),

@@ -32,7 +32,14 @@ after(() => client?.close());
 
 test("lists the tiered tools with read-only annotations (no web_search without a Brave key)", async () => {
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((t) => t.name).sort(), ["web_investigate", "web_lookup", "web_page", "web_read", "web_research"]);
+  assert.deepEqual(tools.map((t) => t.name).sort(), [
+    "web_extract",
+    "web_investigate",
+    "web_lookup",
+    "web_page",
+    "web_read",
+    "web_research",
+  ]);
   const lookup = tools.find((t) => t.name === "web_lookup")!;
   assert.equal(lookup.annotations?.readOnlyHint, true);
   assert.deepEqual(Object.keys((lookup.inputSchema as { properties: object }).properties).sort(), ["max_tokens", "question"]);

@@ -1,6 +1,10 @@
 # Changelog
 
-## 0.1.1 (2026-10-31)
+## 0.2.0 (2026-10-31)
+
+- New `web_extract` tool in a new `direct` tier: one page's own passages that match a goal, in page order, cut to `max_tokens`, inside data markers with a random id per call. No model step and no sign-in. Meant for callers that read well themselves.
+- `web_search` moves from the advanced tier to the direct tier, since it also has no model step.
+- All page text is cleaned before anything reads it: elements hidden by inline styles or attributes are dropped, and invisible characters (zero-width, bidi controls, Unicode tags, variation selectors) are removed. The page cache key changed, so pages cached before this version are fetched again.
 
 - The meta line and `meta.usage` report what each reply's Claude run used: tokens by kind and Claude Code's cost estimate.
 - A call refused as `busy` no longer spends a Brave request: the head start now runs inside the Claude slot.

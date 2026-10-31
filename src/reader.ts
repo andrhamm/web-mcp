@@ -84,7 +84,7 @@ export async function fetchPage(rawUrl: string): Promise<Page> {
     throw new ToolError(e.name === "TimeoutError" ? "timeout" : "fetch_failed", `Could not read ${host}: ${e.message}`);
   });
   const body = decode(bytes, type);
-  return /text\/plain/.test(type) ? { url: url.href, title: url.href, markdown: body.trim() } : extract(body, url.href);
+  return /text\/plain/.test(type) ? { url: url.href, title: url.href, markdown: stripInvisible(body).trim() } : extract(body, url.href);
 }
 
 /**
@@ -131,22 +131,41 @@ turndown.addRule("cell", { filter: ["th", "td"], replacement: (content) => ` ${c
 turndown.addRule("row", { filter: "tr", replacement: (content) => `\n|${content}\n` });
 turndown.addRule("table", { filter: "table", replacement: (content) => `\n\n${content.replace(/\n+/g, "\n").trim()}\n\n` });
 
+// Characters a person cannot see but a model still reads, so they can carry hidden instructions: soft hyphen, zero-width
+// characters and joiners, bidi controls, invisible operators, BOM, variation selectors and Unicode tag characters.
+// Removing joiners can split emoji sequences and alter some scripts slightly; the text stays readable.
+const INVISIBLE =
+  // biome-ignore lint/suspicious/noMisleadingCharacterClass: each invisible code point, joiners included, is matched on its own on purpose
+  /[\u00AD\u061C\u180E\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFE00-\uFE0F\uFEFF\u{E0000}-\u{E007F}\u{E0100}-\u{E01EF}]/gu;
+export const stripInvisible = (s: string) => s.replace(INVISIBLE, "");
+
+// Inline styles that hide an element. Text hidden by stylesheets stays: the reader applies no CSS.
+const HIDDEN_STYLE =
+  /(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden|opacity\s*:\s*0(?:\.0+)?|font-size\s*:\s*0(?:\.0+)?(?:px|em|rem|pt|%)?)\s*(?:!important\s*)?(?:;|$)/i;
+
 export function extract(html: string, url: string): Page {
   // linkedom roots a document without <html> at its first tag, which Readability rejects.
   const source = /<html[\s>]/i.test(html) ? html : `<!doctype html><html><head></head><body>${html}</body></html>`;
   const { document } = parseHTML(source);
+  for (const el of [...document.querySelectorAll("[hidden], [aria-hidden='true'], [style]")]) {
+    if (el.hasAttribute("hidden") || el.getAttribute("aria-hidden") === "true" || HIDDEN_STYLE.test(el.getAttribute("style") ?? ""))
+      el.remove();
+  }
   const title = document.querySelector("title")?.textContent?.trim() || url;
+  const plain = document.body?.textContent ?? ""; // fallback, taken before Readability rewrites the document
   let article: ReturnType<Readability["parse"]> = null;
   try {
     article = new Readability(document as unknown as Document).parse();
   } catch (e) {
     console.error(`[web-mcp] readability failed on ${url}: ${(e as Error).message}`);
   }
-  const markdown = article?.content ? turndown.turndown(article.content) : (parseHTML(source).document.body?.textContent ?? "");
+  const markdown = article?.content ? turndown.turndown(article.content) : plain;
   return {
     url,
-    title: article?.title?.trim() || title,
-    markdown: markdown.replace(/\n{3,}/g, "\n\n").trim(),
+    title: stripInvisible(article?.title?.trim() || title),
+    markdown: stripInvisible(markdown)
+      .replace(/\n{3,}/g, "\n\n")
+      .trim(),
     published: article?.publishedTime ?? undefined,
   };
 }
@@ -176,11 +195,16 @@ export function chunk(markdown: string): string[] {
 }
 
 /** Keep the first passage and the passages that best match `query`, in page order, within `maxChars`. */
-export function select(chunks: string[], query: string, maxChars: number): string {
-  if (chunks.join("\n\n").length <= maxChars) return chunks.join("\n\n");
+/** Passage indexes that match `query`, best first (BM25 with prefix and fuzzy matching). Unmatched passages are left out. */
+export function rank(chunks: string[], query: string): number[] {
   const ms = new MiniSearch({ fields: ["text"], storeFields: [] });
   ms.addAll(chunks.map((text, id) => ({ id, text })));
-  const ranked = ms.search(query, { prefix: true, fuzzy: 0.2, combineWith: "OR" }).map((h) => h.id as number);
+  return ms.search(query, { prefix: true, fuzzy: 0.2, combineWith: "OR" }).map((h) => h.id as number);
+}
+
+export function select(chunks: string[], query: string, maxChars: number): string {
+  if (chunks.join("\n\n").length <= maxChars) return chunks.join("\n\n");
+  const ranked = rank(chunks, query);
   const len = (i: number) => chunks[i]?.length ?? 0;
   const keep = new Set<number>([0]);
   let used = len(0);

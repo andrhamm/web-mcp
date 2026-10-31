@@ -6,7 +6,7 @@ import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { buildServer, TIERS, type Tier, VERSION } from "./server.js";
 
 const USAGE = `web-mcp ${VERSION}
-Usage: web-mcp [--http [host:]port] [--tiers basic,standard,advanced]
+Usage: web-mcp [--http [host:]port] [--tiers basic,standard,advanced,direct]
   --http    serve Streamable HTTP at /mcp instead of stdio (default host 127.0.0.1)
   --tiers   which tool tiers to expose (default: all)
 Environment: BRAVE_API_KEY or BRAVE_API_KEY_FILE, CLAUDE_BIN, WEB_MCP_CACHE_DIR,
