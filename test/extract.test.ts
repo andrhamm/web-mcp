@@ -55,7 +55,16 @@ test("a tiny cap cuts the best passage instead of returning nothing; no match fa
   const tiny = await extractPage({ url: `${URL_}?tiny`, goal: "installation", max_tokens: 90 });
   assert.match(tiny, /Installation sentence 0/);
   assert.match(tiny, /\[…\]/);
-  assert.ok(estimateTokens(tiny.slice(0, tiny.indexOf("\n\nmeta:"))) <= 90);
+  // Every call draws a new random marker id, which tokenizes differently: the cap must hold for all of them.
+  for (let n = 0; n < 40; n++) {
+    for (const cap of [60, 90, 150, 400]) {
+      const out = await extractPage({ url: `${URL_}?tiny`, goal: n % 2 ? "installation" : "licence support history", max_tokens: cap });
+      const size = estimateTokens(out.slice(0, out.indexOf("\n\nmeta:")));
+      // Below the size of the markers themselves no text can fit: the reply is then the bare markers, said so in meta.
+      assert.ok(size <= cap || /max_tokens too small/.test(out), `${size} tokens at cap ${cap}`);
+      if (cap >= 90) assert.ok(size <= cap && !/too small/.test(out), `${size} tokens at cap ${cap}`);
+    }
+  }
   const none = await extractPage({ url: `${URL_}?none`, goal: "zzqx frobnicate", max_tokens: 300 });
   assert.match(none, /Introduction sentence 0/);
 });
