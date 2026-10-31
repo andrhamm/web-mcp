@@ -1,6 +1,11 @@
 # Changelog
 
-## 0.2.0 (2026-10-31)
+## 0.2.1 (2026-10-31)
+
+- `web_extract` holds `max_tokens` at small caps: the cap is checked on the exact text returned, a URL-only header is used when the full one does not fit, and when no page text fits the reply is the empty markers with a note in the meta line.
+- 0.2.0 was tagged but never published to npm, because this bug failed its pre-publish tests. 0.2.1 is the first published release with the 0.2.0 changes below.
+
+## 0.2.0 (2026-10-31, not published)
 
 - New `web_extract` tool in a new `direct` tier: one page's own passages that match a goal, in page order, cut to `max_tokens`, inside data markers with a random id per call. No model step and no sign-in. Meant for callers that read well themselves.
 - `web_search` moves from the advanced tier to the direct tier, since it also has no model step.

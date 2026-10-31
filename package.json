@@ -1,6 +1,6 @@
 {
   "name": "@andrhamm/web-mcp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Local MCP server that answers web research questions with compact, cited, goal-filtered results sized to a token cap",
   "type": "module",
   "license": "MIT",
